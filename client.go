@@ -9,14 +9,14 @@ import (
 )
 
 type Client struct {
-	Config     *Config
-	HTTPClient *http.Client
+	c          *Config
+	httpClient *http.Client
 }
 
 func NewClient(config *Config, opts ...ClientOpts) *Client {
 	m := &Client{
-		Config:     config,
-		HTTPClient: http.DefaultClient,
+		c:          config,
+		httpClient: http.DefaultClient,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -28,17 +28,17 @@ type ClientOpts func(*Client)
 
 func WithCustomHTTPClient(c *http.Client) ClientOpts {
 	return func(m *Client) {
-		m.HTTPClient = c
+		m.httpClient = c
 	}
 }
 
-func (m *Client) Send(req *http.Request, v interface{}) error {
+func (c *Client) Send(req *http.Request, v interface{}) error {
 	req.Header = http.Header{
 		"Content-type":  {"application/json"},
-		"Authorization": {"Basic " + m.Config.BasicAuth},
+		"Authorization": {"Basic " + c.c.BasicAuth},
 	}
 
-	if m.Config.Debug {
+	if c.c.Debug {
 		log.Printf(
 			"[RozetkaPay] Debug --- type: %s, method: %s, url: %s\n",
 			"request",
@@ -47,7 +47,7 @@ func (m *Client) Send(req *http.Request, v interface{}) error {
 		)
 	}
 
-	resp, err := m.HTTPClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (m *Client) Send(req *http.Request, v interface{}) error {
 		return nil
 	}
 
-	if m.Config.Debug {
+	if c.c.Debug {
 		log.Printf(
 			"[RozetkaPay] Debug --- type: %s, method: %s, url: %s, code: %d, bytes: %d\n",
 			"response",
@@ -97,7 +97,7 @@ func (m *Client) Send(req *http.Request, v interface{}) error {
 	return json.Unmarshal(body, v)
 }
 
-func (m *Client) NewRequest(method, url string, payload interface{}, query map[string]string) (
+func (c *Client) NewRequest(method, url string, payload interface{}, query map[string]string) (
 	*http.Request, error,
 ) {
 	var buf io.Reader
@@ -124,109 +124,75 @@ func (m *Client) NewRequest(method, url string, payload interface{}, query map[s
 }
 
 // Creates payment and performs desired operation.
-func (m *Client) CreatePayment(schema *CreatePaymentSchema) (
-	*PaymentResponse, error,
-) {
-	req, err := m.NewRequest(
-		http.MethodPost,
-		m.Config.API+"payments/v1/new",
-		schema,
-		nil,
-	)
+func (c *Client) CreatePayment(schema *CreatePaymentSchema) (*PaymentResponse, error) {
+	req, err := c.NewRequest(http.MethodPost, c.c.API+"payments/v1/new", schema, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp := &PaymentResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Confirm two-step payment.
-func (m *Client) ConfirmPayment(schema *ConfirmPaymentSchema) (
-	*PaymentResponse, error,
-) {
-	req, err := m.NewRequest(
-		http.MethodPost,
-		m.Config.API+"payments/v1/confirm",
-		schema,
-		nil,
-	)
+func (c *Client) ConfirmPayment(schema *ConfirmPaymentSchema) (*PaymentResponse, error) {
+	req, err := c.NewRequest(http.MethodPost, c.c.API+"payments/v1/confirm", schema, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp := &PaymentResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Cancel two-step payment.
-func (m *Client) CancelPayment(schema *CancelPaymentSchema) (
-	*PaymentResponse, error,
-) {
-	req, err := m.NewRequest(
-		http.MethodPost,
-		m.Config.API+"payments/v1/cancel",
-		schema,
-		nil,
-	)
+func (c *Client) CancelPayment(schema *CancelPaymentSchema) (*PaymentResponse, error) {
+	req, err := c.NewRequest(http.MethodPost, c.c.API+"payments/v1/cancel", schema, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp := &PaymentResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Refund one-step payment after withdrawal, or two-step payment after confirmation.
-func (m *Client) RefundPayment(schema *RefundPaymentSchema) (
-	*PaymentResponse, error,
-) {
-	req, err := m.NewRequest(
-		http.MethodPost,
-		m.Config.API+"payments/v1/refund",
-		schema,
-		nil,
-	)
+func (c *Client) RefundPayment(schema *RefundPaymentSchema) (*PaymentResponse, error) {
+	req, err := c.NewRequest(http.MethodPost, c.c.API+"payments/v1/refund", schema, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp := &PaymentResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Get payment info by id.
-func (m *Client) GetPaymentInfo(externalID string) (
-	*PaymentInfoResponse, error,
-) {
-	req, err := m.NewRequest(
-		http.MethodGet,
-		m.Config.API+"payments/v1/info",
-		nil,
-		map[string]string{"external_id": externalID},
+func (c *Client) GetPaymentInfo(externalID string) (*PaymentInfoResponse, error) {
+	req, err := c.NewRequest(
+		http.MethodGet, c.c.API+"payments/v1/info",
+		nil, map[string]string{"external_id": externalID},
 	)
 	if err != nil {
 		return nil, err
 	}
 	resp := &PaymentInfoResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Parsing callback from the body.
-func (m *Client) GetPaymentCallbackFromBytes(body []byte) (
-	*PaymentResponse, error,
-) {
+func (c *Client) GetPaymentCallbackFromBytes(body []byte) (*PaymentResponse, error) {
 	var callback *PaymentResponse
 	if err := json.Unmarshal(body, &callback); err != nil {
 		return nil, err
@@ -236,79 +202,64 @@ func (m *Client) GetPaymentCallbackFromBytes(body []byte) (
 
 // Prepares the data about the specified payment of transaction and sends it into callback_url which was provided on the payment step.
 // If the operation field is not provided the callback will be sent for the last operation.
-func (m *Client) ResendPaymentCallback(schema *PaymentCallbackResendSchema) (
-	resended bool, err error,
-) {
-	req, err := m.NewRequest(
-		http.MethodPost,
-		m.Config.API+"payments/v1/callback/resend",
-		schema,
-		nil,
-	)
+func (c *Client) ResendPaymentCallback(schema *PaymentCallbackResendSchema) (resended bool, err error) {
+	req, err := c.NewRequest(http.MethodPost, c.c.API+"payments/v1/callback/resend", schema, nil)
 	if err != nil {
 		return false, err
 	}
-	if err := m.Send(req, nil); err != nil {
+	if err := c.Send(req, nil); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 // Adds new payment method to wallet.
-func (m *Client) AddWalletCustomerPayment(customerID string, schema *AddWalletCustomerSchema) (
+func (c *Client) AddWalletCustomerPayment(customerID string, schema *AddWalletCustomerSchema) (
 	*AddWalletCustomerResponse, error,
 ) {
-	req, err := m.NewRequest(
-		http.MethodPost,
-		m.Config.API+"customers/v1/wallet",
-		schema,
-		map[string]string{"external_id": customerID},
+	req, err := c.NewRequest(
+		http.MethodPost, c.c.API+"customers/v1/wallet",
+		schema, map[string]string{"external_id": customerID},
 	)
 	if err != nil {
 		return nil, err
 	}
 	resp := &AddWalletCustomerResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Returns customer details including payment methods, if saved.
-func (m *Client) GetWalletCustomerPaymentInfo(customerID string) (
-	*GetWalletInfoResponse, error,
-) {
-	req, err := m.NewRequest(
-		http.MethodGet,
-		m.Config.API+"customers/v1/wallet",
-		nil,
-		map[string]string{"external_id": customerID},
+func (c *Client) GetWalletCustomerPaymentInfo(customerID string) (*GetWalletInfoResponse, error) {
+	req, err := c.NewRequest(
+		http.MethodGet, c.c.API+"customers/v1/wallet",
+		nil, map[string]string{"external_id": customerID},
 	)
 	if err != nil {
 		return nil, err
 	}
 	resp := &GetWalletInfoResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 // Deletes customer payment method from wallet.
-func (m *Client) DeleteWalletCustomerPayment(customerID string, schema *DeleteWalletCustomerSchema) (
+func (c *Client) DeleteWalletCustomerPayment(customerID string, schema *DeleteWalletCustomerSchema) (
 	*DeleteWalletCustomerResponse, error,
 ) {
-	req, err := m.NewRequest(
-		http.MethodDelete,
-		m.Config.API+"customers/v1/wallet",
-		schema,
-		map[string]string{"external_id": customerID},
+	req, err := c.NewRequest(
+		http.MethodDelete, c.c.API+"customers/v1/wallet",
+		schema, map[string]string{"external_id": customerID},
 	)
 	if err != nil {
 		return nil, err
 	}
 	resp := &DeleteWalletCustomerResponse{}
-	if err := m.Send(req, resp); err != nil {
+	if err := c.Send(req, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
